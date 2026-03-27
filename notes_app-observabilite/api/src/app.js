@@ -1,4 +1,6 @@
 import express from "express";
+import logger from "./logger.js";
+import { metricsHandler, metricsMiddleware } from "./metrics.js";
 
 // =======================
 // Helpers
@@ -15,6 +17,7 @@ function isStringOrUndefined(v) {
 function parseId(req, res) {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
+    logger.warn({ params: req.params }, "Invalid id received");
     res.status(400).json({ error: "Invalid id. Expected a positive integer." });
     return null;
   }
@@ -25,9 +28,27 @@ export function createApp({ pool }) {
   const app = express();
   app.use(express.json());
 
+  app.use(metricsMiddleware);
+
   // =======================
   // Healthcheck
   // =======================
+
+  app.get("/health", (_, res) => {
+    res.status(200).json({ status: "ok", service: "up" });
+  });
+
+  app.get("/health/db", async (_, res) => {
+    try {
+      await pool.query("SELECT 1");
+      return res.status(200).json({ status: "ok", database: "up" });
+    } catch (error) {
+      logger.error({ err: error }, "Database health check failed");
+      return res.status(503).json({ status: "error", database: "down" });
+    }
+  });
+
+  app.get("/metrics", metricsHandler);
 
   // =======================
   // CRUD NOTES
@@ -35,7 +56,7 @@ export function createApp({ pool }) {
 
   // GET /notes
   app.get("/notes", async (_, res) => {
-    console.log("Fetching all notes");
+    logger.info("Fetching all notes");
 
     const result = await pool.query(
       "SELECT * FROM notes ORDER BY created_at DESC",
@@ -47,9 +68,10 @@ export function createApp({ pool }) {
   app.post("/notes", async (req, res) => {
     const { title, content } = req.body;
 
-    console.log("Creating note", { title });
+    logger.info({ title }, "Creating note");
 
     if (!isNonEmptyString(title)) {
+      logger.warn({ body: req.body }, "Missing or invalid note title");
       return res.status(400).json({
         error: "title is required",
       });
@@ -60,7 +82,7 @@ export function createApp({ pool }) {
       [title, content],
     );
 
-    console.log("Note created", { id: result.rows[0].id });
+    logger.info({ id: result.rows[0].id }, "Note created");
 
     res.status(201).json(result.rows[0]);
   });
@@ -72,15 +94,17 @@ export function createApp({ pool }) {
 
     const { title, content } = req.body;
 
-    console.log("Updating note", { id });
+    logger.info({ id }, "Updating note");
 
     if (!isNonEmptyString(title)) {
+      logger.warn({ id, body: req.body }, "Invalid title during note update");
       return res.status(400).json({
         error: "title is required and must be a non-empty string",
       });
     }
 
     if (!isStringOrUndefined(content)) {
+      logger.warn({ id, body: req.body }, "Invalid content during note update");
       return res.status(400).json({
         error: "content must be a string if provided",
       });
@@ -101,7 +125,7 @@ export function createApp({ pool }) {
       return res.status(404).json({ error: "note not found" });
     }
 
-    console.log("Note updated", { id });
+    logger.info({ id }, "Note updated");
 
     res.json(result.rows[0]);
   });
@@ -110,7 +134,7 @@ export function createApp({ pool }) {
   app.get("/notes/:id", async (req, res) => {
     const { id } = req.params;
 
-    console.log("Fetching note", { id });
+    logger.info({ id }, "Fetching note");
 
     const result = await pool.query("SELECT * FROM notes WHERE id = $1", [id]);
 
@@ -125,7 +149,7 @@ export function createApp({ pool }) {
   app.delete("/notes/:id", async (req, res) => {
     const { id } = req.params;
 
-    console.log("Deleting note", { id });
+    logger.info({ id }, "Deleting note");
 
     const result = await pool.query(
       "DELETE FROM notes WHERE id = $1 RETURNING *",
@@ -136,9 +160,23 @@ export function createApp({ pool }) {
       return res.status(404).json({ error: "note not found" });
     }
 
-    console.log("Note deleted", { id });
+    logger.info({ id }, "Note deleted");
 
     res.status(204).send();
+  });
+
+  // =======================
+  // Error handler
+  // =======================
+
+  app.use((error, req, res, next) => {
+    logger.error({ err: error, path: req.path }, "Unhandled error");
+
+    if (res.headersSent) {
+      return next(error);
+    }
+
+    return res.status(500).json({ error: "Internal server error" });
   });
 
   // =======================
