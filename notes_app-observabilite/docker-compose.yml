@@ -12,6 +12,7 @@ services:
       - .env
     volumes:
       - db-data:/var/lib/postgresql/data
+      - ./docker/db/init:/docker-entrypoint-initdb.d:ro
 
 volumes:
   db-data:

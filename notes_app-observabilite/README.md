@@ -59,6 +59,20 @@ POSTGRES_PASSWORD=notespwd
 docker compose up --build
 ```
 
+### Initialisation automatique de la base (Docker)
+
+- Le dossier `docker/db/init` contient les scripts SQL exécutés automatiquement par l'image officielle Postgres :
+  - `01-schema.sql` : crée la table `notes`
+  - `02-seed.sql` : insère des notes de démonstration
+- Ce dossier est monté dans le conteneur DB via `/docker-entrypoint-initdb.d`.
+- Important : ces scripts ne s'exécutent **qu'au premier démarrage** si le volume Postgres est vide.
+- Pour rejouer l'initialisation complète :
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
 ### Option B — local sans Docker
 
 Depuis `notes_app-observabilite/api` :
