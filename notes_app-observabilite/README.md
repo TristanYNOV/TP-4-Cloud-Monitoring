@@ -99,6 +99,43 @@ Réponse attendue : HTTP 200 avec JSON `{"status":"ok","service":"up"}`.
 
 ---
 
+## 4.1) Tests manuels avec Postman
+
+Un dossier Postman est disponible ici :
+
+- `notes_app-observabilite/postman/`
+  - `notes-api.postman_collection.json`
+  - `local.postman_environment.json`
+
+### Importer la collection et l'environnement
+
+1. Ouvrir Postman.
+2. Cliquer sur **Import**.
+3. Importer les deux fichiers du dossier `postman/` :
+   - la collection `notes-api.postman_collection.json`
+   - l'environnement `local.postman_environment.json`
+4. Sélectionner l'environnement **Notes API - Local**.
+
+La variable `{{baseUrl}}` est déjà configurée avec `http://localhost:3000`.
+
+### Scénario de tests manuels recommandé
+
+1. **Health**
+   - `GET /health` (API vivante)
+   - `GET /health/db` (DB prête)
+2. **Metrics**
+   - `GET /metrics` (format Prometheus)
+3. **Notes**
+   - `GET /notes` (lister les notes)
+   - `POST /notes` (créer une note)
+   - `GET /notes/:id` (lire une note, via `{{noteId}}`)
+   - `PUT /notes/:id` (modifier une note)
+   - `DELETE /notes/:id` (supprimer une note)
+
+Astuce : après un `POST /notes`, mettre à jour la variable `{{noteId}}` avec l'`id` retourné pour enchaîner les requêtes `GET/PUT/DELETE`.
+
+---
+
 ## 5) Variables d'environnement utiles
 
 ### API
